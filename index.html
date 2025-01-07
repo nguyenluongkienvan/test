@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Study</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+
+        .flashcards-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 20px;
+            width: 100%;
+        }
+
+        .flashcard {
+            width: 200px;
+            height: 150px;
+            background-color: #fff;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            position: relative;
+            cursor: pointer;
+            perspective: 1000px;
+        }
+
+        .flashcard-inner {
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            transition: transform 0.5s;
+            position: absolute;
+        }
+
+        .flashcard.flipped .flashcard-inner {
+            transform: rotateY(180deg);
+        }
+
+        .flashcard-front,
+        .flashcard-back {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            backface-visibility: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            border-radius: 10px;
+            box-sizing: border-box;
+        }
+
+        .flashcard-back {
+            background-color: #f9f9f9;
+            transform: rotateY(180deg);
+        }
+
+        .flashcard-learned {
+            width: 100%;
+            background-color: #f9f9f9;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            text-align: left;
+            position: relative;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+            min-width: 100%;
+        }
+
+        .flashcard-learned.vertical {
+            width: 100%; 
+            height: auto;
+            padding: 15px;
+            box-sizing: border-box;
+            margin: 0;
+        }
+
+        .buttons {
+            position: absolute;
+            top: 6px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            display: none;
+        }
+
+        .flashcard:hover .buttons {
+            display: flex;
+        }
+
+        .btn {
+            padding: 4px 8px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+font-size: 12px;
+        }
+
+        .delete-btn {
+            position: absolute;
+            top: 7px;
+            right: 5px;
+            background-color: #ff4757;
+            color: white;
+            width: 20px; /* Giảm kích thước nút xoá */
+            height: 20px; /* Giảm kích thước nút xoá */
+            font-size: 12px; /* Kích thước chữ nhỏ hơn */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border: none;
+            transition: background-color 0.3s, transform 0.3s;
+            box-sizing: border-box;
+        }
+
+        .delete-btn:hover {
+            background-color: #e84118;
+            transform: scale(1.2); /* Phóng to thêm khi hover */
+        }
+
+        .move-btn {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .form-container {
+            margin-bottom: 30px;
+        }
+
+        input, button {
+            padding: 10px;
+            margin: 5px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        button {
+            background-color: #28a745;
+            color: white;
+        }
+
+        .container-title {
+            font-size: 22px;
+            margin-top: 40px;
+        }
+
+        /* Cập nhật nút xoá của phần đã học */
+        .flashcard-learned .delete-btn {
+            top: 5px;  /* Dịch lên một chút */
+            right: 5px;
+        }
+
+        /* Cập nhật nút xoá của phần đang học */
+        .flashcard .delete-btn {
+            top: 1px;
+            right: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Test</h1>
+
+    <div class="form-container">
+        <input type="text" id="question" placeholder="Nhập từ vựng...">
+        <input type="text" id="answer" placeholder="Nhập nghĩa...">
+        <button onclick="createFlashcard()">Tạo</button>
+    </div>
+
+    <h2 class="container-title">Đang học</h2>
+    <div class="flashcards-container" id="studying-container"></div>
+
+    <h2 class="container-title">Đã học</h2>
+    <div class="flashcards-container" id="learned-container"></div>
+
+    <script>
+        let db;
+
+        const request = indexedDB.open("FlashcardDB", 1);
+
+        request.onupgradeneeded = function(event) {
+            db = event.target.result;
+            const store = db.createObjectStore("flashcards", { keyPath: "id", autoIncrement: true });
+            store.createIndex("status", "status", { unique: false });
+        };
+
+        request.onsuccess = function(event) {
+            db = event.target.result;
+            loadFlashcards();
+        };
+
+        request.onerror = function(event) {
+            console.error("Lỗi khởi tạo IndexedDB", event);
+        };
+
+        function createFlashcard() {
+            const question = document.getElementById('question').value;
+const answer = document.getElementById('answer').value;
+
+            if (question && answer) {
+                const flashcard = { question, answer, status: "studying" };
+                saveToDB(flashcard);
+                document.getElementById('question').value = ''; // Reset trường từ vựng
+                document.getElementById('answer').value = '';  // Reset trường nghĩa
+            } else {
+                alert("Vui lòng nhập từ vựng và nghĩa!");
+            }
+        }
+
+        function saveToDB(flashcard) {
+            const transaction = db.transaction("flashcards", "readwrite");
+            const store = transaction.objectStore("flashcards");
+            store.add(flashcard);
+
+            transaction.oncomplete = function() {
+                loadFlashcards();
+            };
+        }
+
+        function loadFlashcards() {
+            const studyingContainer = document.getElementById('studying-container');
+            const learnedContainer = document.getElementById('learned-container');
+            studyingContainer.innerHTML = '';
+            learnedContainer.innerHTML = '';
+
+            const transaction = db.transaction("flashcards", "readonly");
+            const store = transaction.objectStore("flashcards");
+            const request = store.openCursor();
+
+            request.onsuccess = function(event) {
+                const cursor = event.target.result;
+                if (cursor) {
+                    const flashcard = cursor.value;
+                    const container = flashcard.status === "studying" ? studyingContainer : learnedContainer;
+                    if (flashcard.status === "studying") {
+                        addFlashcardToPage(flashcard, cursor.key, container);
+                    } else {
+                        addLearnedFlashcardToPage(flashcard, cursor.key, container);
+                    }
+                    cursor.continue();
+                }
+            };
+        }
+
+        function addFlashcardToPage(flashcardData, id, container) {
+            const flashcard = document.createElement('div');
+            flashcard.classList.add('flashcard');
+            flashcard.innerHTML = `
+                <div class="flashcard-inner">
+                    <div class="flashcard-front">${flashcardData.question}</div>
+                    <div class="flashcard-back">${flashcardData.answer}</div>
+                </div>
+                <div class="buttons">
+                    <button class="btn move-btn" onclick="moveFlashcard(${id}, '${flashcardData.status}')">↩</button>
+                    <button class="btn delete-btn" onclick="deleteFlashcard(${id})">X</button>
+                </div>
+            `;
+            flashcard.addEventListener('click', () => {
+                flashcard.classList.toggle('flipped');
+            });
+            container.appendChild(flashcard);
+        }
+
+        function addLearnedFlashcardToPage(flashcardData, id, container) {
+const flashcard = document.createElement('div');
+            flashcard.classList.add('flashcard-learned');
+            flashcard.innerHTML = `
+                <span>${flashcardData.question} : ${flashcardData.answer}</span>
+                <button class="delete-btn" onclick="deleteFlashcard(${id})">X</button>
+            `;
+            container.appendChild(flashcard);
+        }
+
+        function moveFlashcard(id, status) {
+            const transaction = db.transaction("flashcards", "readwrite");
+            const store = transaction.objectStore("flashcards");
+            store.get(id).onsuccess = function(event) {
+                const flashcard = event.target.result;
+                flashcard.status = status === "studying" ? "learned" : "studying";
+                store.put(flashcard);
+                loadFlashcards();
+            };
+        }
+
+        function deleteFlashcard(id) {
+            const transaction = db.transaction("flashcards", "readwrite");
+            const store = transaction.objectStore("flashcards");
+            store.delete(id);
+            transaction.oncomplete = loadFlashcards;
+        }
+    </script>
+
+</body>
+</html>
